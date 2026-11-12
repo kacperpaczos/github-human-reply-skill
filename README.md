@@ -10,10 +10,10 @@ With the [skills CLI](https://github.com/vercel-labs/skills), which works with C
 
 ```bash
 # from GitHub
-npx skills add <owner>/github-human-reply-skill
+npx skills add kacperpaczos/github-human-reply-skill
 
 # globally, for a specific agent
-npx skills add <owner>/github-human-reply-skill --skill github-human-reply -g -a claude-code
+npx skills add kacperpaczos/github-human-reply-skill --skill github-human-reply -g -a claude-code
 
 # from a local clone
 npx skills add ./github-human-reply-skill
