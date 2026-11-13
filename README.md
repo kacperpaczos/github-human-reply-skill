@@ -26,14 +26,18 @@ Or copy `skills/github-human-reply/` into `~/.claude/skills/` (personal) or `.cl
 ```
 skills/
 └── github-human-reply/
-    ├── SKILL.md                  # workflow, checks, writing rules
+    ├── SKILL.md              # the workflow: gather, close gaps, draft, show, post after approval
+    ├── scripts/ghr.py        # one command gathers the thread, rules, project style, duplicates; guarded poster
     └── references/
-        └── gh-commands.md        # gh / API commands for reading and posting
+        ├── writing.md        # how to write the draft, including the humanize pass
+        └── filing.md         # routing and writing for a new issue
+research/                     # how 17 projects write issues and replies, and the evidence behind the rules
+benchmark/                    # reply benchmark against real maintainer replies
 ```
 
 ## Requirements
 
-The [gh CLI](https://cli.github.com/), authenticated.
+The [gh CLI](https://cli.github.com/), authenticated, and Python 3.8 or newer.
 
 ## License
 
