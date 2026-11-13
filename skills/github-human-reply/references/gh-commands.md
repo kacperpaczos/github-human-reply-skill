@@ -5,6 +5,7 @@
 ## Contents
 
 - Account, repository, role
+- Project rules
 - Reading an issue
 - Reading a PR
 - How people here write
@@ -17,8 +18,23 @@
 ```bash
 gh auth status                                  # which account will post
 gh repo view O/R --json nameWithOwner,isFork,parent,defaultBranchRef
-gh api repos/O/R --jq '.permissions'            # push: true means maintainer voice
+gh api repos/O/R --jq '.permissions'            # evidence of the user's role, not proof
 ```
+
+`push`, `maintain` or `triage` set to true suggests the user helps run the project. What the user says about their role wins.
+
+## Project rules
+
+```bash
+gh api repos/O/R/community/profile --jq '.files | to_entries[] | select(.value) | .key'   # which files exist
+gh api repos/O/R/contents/CONTRIBUTING.md -H "Accept: application/vnd.github.raw"
+gh api repos/O/R/contents/SECURITY.md -H "Accept: application/vnd.github.raw"
+gh api repos/O/R/contents/.github/PULL_REQUEST_TEMPLATE.md -H "Accept: application/vnd.github.raw"
+```
+
+The community profile lists which files exist but not their text, and it does not report `SECURITY`. File names and locations vary (`docs/`, `.github/`, the owner's `.github` repository), so look at the profile's `html_url` values or the repository root when a path returns 404. Search what you fetched for "AI", "LLM", "generated", "agent" and "human-written" to find the project's policy on AI-written text.
+
+A 404 means "not found at this path with this account". On a private or restricted repository it does not prove the file is absent.
 
 ## Reading an issue
 
@@ -65,35 +81,37 @@ query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
 }' -f owner=O -f repo=R -F pr=N
 ```
 
+`--paginate` walks the threads, not the comments inside one thread. If a thread reaches 100 comments, fetch the rest of that thread separately before calling the read complete.
+
 The thread `id` is what a GraphQL reply needs. The first comment's `databaseId` is the top-level comment ID a REST reply needs.
 
 ## How people here write
 
-Recent comments by maintainers of the repository, newest first:
+On a busy repository the newest comments are mostly bots and reporters, so go through search instead of the comment feed.
+
+The people who run the project are whoever closes, labels and merges, whatever badge they show:
 
 ```bash
-gh api "repos/O/R/issues/comments?sort=created&direction=desc&per_page=100" --jq '
-  .[] | select(.author_association=="OWNER" or .author_association=="MEMBER" or .author_association=="COLLABORATOR")
-      | select(.user.type=="User") | {user: .user.login, body}'
+gh api "repos/O/R/issues?state=closed&per_page=30" --jq '.[] | select(.pull_request|not) | .closed_by.login' | sort | uniq -c | sort -rn
+gh search issues --repo O/R --commenter LOGIN --sort updated --limit 5 --json number,title
+gh api repos/O/R/issues/N/comments --paginate --jq '.[] | select(.user.login=="LOGIN") | .body[0:800]'
 ```
 
-The user's own recent comments, first in this repository, then anywhere:
+The user's own recent comments, in this repository and then anywhere:
 
 ```bash
-me=$(gh api user --jq .login)
-gh api "repos/O/R/issues/comments?sort=created&direction=desc&per_page=100" \
-  --jq ".[] | select(.user.login==\"$me\") | .body"
+gh search issues --repo O/R --commenter @me --include-prs --sort updated --limit 5 --json number,title
 gh api graphql -f query='{ viewer { issueComments(last: 20) { nodes { url body } } } }' \
-  --jq '.data.viewer.issueComments.nodes[] | {url, body}'
+  --jq '.data.viewer.issueComments.nodes[] | {url, body: .body[0:800]}'
 ```
 
-Ten to twenty comments are enough. Skip ones that are mostly pasted logs or look generated.
+About a dozen comments from each side are enough. Skip ones that are mostly pasted logs.
 
 ## Checking facts
 
 ```bash
-gh search issues "<keywords>" --repo O/R --include-prs          # open and closed
-gh search issues "<keywords>" --repo O/R --state closed --match title
+gh search issues "<2-3 keywords>" --repo O/R --include-prs      # open and closed
+gh search issues "<2-3 keywords>" --repo O/R --state closed --match title
 gh pr list --repo O/R --state all --search "<keywords>"
 gh release list --repo O/R --limit 10
 git log --oneline -S'<string>' -- <path>       # when a string appeared or vanished
@@ -102,7 +120,16 @@ git tag --contains <sha>                        # which releases include a commi
 git show <tag>:<path>                           # the file as the reporter has it
 ```
 
-Try at least two wordings in the search: the error text, and the symptom in plain words.
+Search terms are ANDed, so four words often return nothing where two return the duplicate. Try at least two wordings: the error text, and the symptom in plain words.
+
+Without a local clone, the same checks work through the API:
+
+```bash
+gh api "repos/O/R/contents/<path>?ref=<tag-or-sha>" -H "Accept: application/vnd.github.raw"   # a file at a version
+gh api "repos/O/R/commits?path=<path>&per_page=10" --jq '.[] | "\(.sha[0:8]) \(.commit.message | split("\n")[0])"'
+gh api repos/O/R/compare/<tag>...<sha> --jq '.status'    # "behind" or "identical": the tag contains the commit
+gh search code "<symbol>" --repo O/R
+```
 
 ## Before filing an issue
 
@@ -110,18 +137,17 @@ Try at least two wordings in the search: the error text, and the symptom in plai
 gh api repos/O/R/contents/.github/ISSUE_TEMPLATE --jq '.[].name'
 gh api repos/O/R/contents/.github/ISSUE_TEMPLATE/config.yml -H "Accept: application/vnd.github.raw"
 gh api repos/O/.github/contents/.github/ISSUE_TEMPLATE --jq '.[].name'   # owner-wide fallback
-gh api repos/O/R/community/profile --jq '.files'                         # CONTRIBUTING, SECURITY, templates
 gh label list --repo O/R --limit 100
 ```
 
-A 404 means the file is absent, which is normal. For a YAML issue form, render each field's `attributes.label` as a `###` heading with the answer under it, which is what the web form produces. If `config.yml` has `blank_issues_enabled: false`, use one of the templates.
+A 404 here usually means the folder does not exist, which is normal. For a YAML issue form, render each field's `attributes.label` as a `###` heading with the answer under it, which is what the web form produces. If `config.yml` has `blank_issues_enabled: false`, use one of the templates.
 
 ## Posting
 
 Write the approved text to a temporary file outside the repository, then post from the file.
 
 ```bash
-body=$(mktemp --suffix=.md)    # write the approved text into "$body"
+body=$(mktemp)    # write the approved text into "$body"
 
 # new issue
 gh issue create --repo O/R --title "<title>" --body-file "$body"
@@ -144,7 +170,7 @@ mutation($threadId: ID!, $body: String!) {
 Notes:
 
 - The REST reply endpoint takes only `body`. Its `COMMENT_ID` must be the top-level comment of the thread; to answer a later comment, reply to the same thread and it lands at the bottom.
-- Add `--label`, `--assignee`, `--type` or `--milestone` to `gh issue create` only when the user asked, or the template declares them. Use labels that already exist.
+- Add `--label`, `--assignee`, `--type` or `--milestone` to `gh issue create` only when the user asked. Use labels that already exist. If the chosen template would set labels or a type, say so in the draft summary and let the user decide.
 - Each command prints or returns the URL of the new comment or issue. Pass it on to the user.
 - To fix a typo in something already posted, with the user's approval:
   `gh api -X PATCH repos/O/R/issues/comments/COMMENT_ID -F body=@"$body"`. An edit does not recall the notification email.

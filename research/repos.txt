@@ -1,0 +1,17 @@
+astral-sh/ruff
+vitejs/vite
+linuxmint/cinnamon
+linuxmint/nemo
+neovim/neovim
+systemd/systemd
+flatpak/flatpak
+podman-container-tools/podman
+swaywm/sway
+mpv-player/mpv
+alacritty/alacritty
+helix-editor/helix
+curl/curl
+BurntSushi/ripgrep
+PrismLauncher/PrismLauncher
+godotengine/godot
+siyuan-note/siyuan
