@@ -29,6 +29,9 @@ def metrics(t):
     }
 
 
+FAILED = []  # cases excluded because a run produced no draft
+
+
 def arg(name):
     return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None
 
@@ -36,17 +39,24 @@ def arg(name):
 def load():
     rows = []
     v1 = "--v1" in sys.argv
+    tag = arg("--tag")
     skill_file, jdir = ("skill_v1.json", "judgements_v1") if v1 else ("skill.json", "judgements")
+    rdir = "runs_" + tag if tag else "runs"
+    if tag:
+        jdir = "judgements_" + tag
     test = set((WORK / "test_cases.txt").read_text().split()) if (WORK / "test_cases.txt").exists() else set()
     which = arg("--set")
     for h in sorted((WORK / "hidden").glob("*.json")):
         h = json.loads(h.read_text())
         if (which == "test" and h["id"] not in test) or (which == "dev" and h["id"] in test):
             continue
-        d = WORK / "runs" / h["id"]
+        d = WORK / rdir / h["id"]
         if not (d / skill_file).exists() or not (d / "baseline.json").exists():
             continue
         runs = {"skill": json.loads((d / skill_file).read_text()), "baseline": json.loads((d / "baseline.json").read_text())}
+        if runs["skill"]["reply"] is None or runs["baseline"]["reply"] is None:
+            FAILED.append((h["id"], [a for a in ("skill", "baseline") if runs[a]["reply"] is None]))
+            continue
         texts = {"human": h["reply"], "skill": runs["skill"]["reply"], "baseline": runs["baseline"]["reply"]}
         js = {}
         for f in sorted((WORK / jdir / h["id"]).glob("*.json")) if (WORK / jdir / h["id"]).exists() else []:
@@ -60,6 +70,8 @@ def main():
     rows = load()
     n = len(rows)
     print(f"# Reply benchmark: {n} cases\n")
+    if FAILED:
+        print("Excluded, no draft from: " + "; ".join(f"{c} ({'+'.join(a)})" for c, a in FAILED) + "\n")
     print("## Text shape (median unless noted)\n")
     print("| | human | skill | baseline |\n|---|---|---|---|")
     med = lambda a, k: st.median([r["m"][a][k] for r in rows if r["texts"][a] and r["texts"][a] != "NO_REPLY"])
@@ -72,8 +84,12 @@ def main():
     print(f"| length / human length | 1.0 | {ratio('skill'):.1f} | {ratio('baseline'):.1f} |")
     print(f"| NO_REPLY | - | {sum(1 for r in rows if r['texts']['skill'] == 'NO_REPLY')} | {sum(1 for r in rows if r['texts']['baseline'] == 'NO_REPLY')} |")
     for a in ("skill", "baseline"):
-        print(f"\n{a}: median {st.median([r['runs'][a]['seconds'] for r in rows])}s, {st.median([r['runs'][a]['turns'] or 0 for r in rows])} turns, "
-              f"${sum(r['runs'][a]['cost_usd'] or 0 for r in rows):.2f} total")
+        toks = [r["runs"][a].get("tokens") for r in rows if r["runs"][a].get("tokens")]
+        print(f"\n{a}: median {st.median([r['runs'][a]['seconds'] for r in rows])}s, {st.median([r['runs'][a]['turns'] or 0 for r in rows])} turns"
+              + (f", median {round(st.median(toks)/1000)}k tokens (total {round(sum(toks)/1000)}k)" if toks else "")
+              + (f", ${sum(r['runs'][a]['cost_usd'] or 0 for r in rows):.2f} total" if any(r['runs'][a].get('cost_usd') for r in rows) else "")
+              + (f", used the script in {sum(1 for r in rows if r['runs'][a].get('used_script'))}/{len(rows)}" if a == "skill" else "")
+              + (f", flagged for network use in {sum(1 for r in rows if r['runs'][a].get('leaks'))}" ))
 
     print("\n## Blind test: which reply did the judge take for the real one?\n")
     judges = sorted({j for r in rows for j in r["j"].get("blind", {})})

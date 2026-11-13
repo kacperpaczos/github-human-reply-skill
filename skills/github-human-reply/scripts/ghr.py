@@ -176,7 +176,7 @@ def render_room(p, who):
                 "one paragraph, no greeting, no thanks as an opener, English unless the thread is in another language.\n")
     L = [f"## How people write here ({who}, n={p['n']})",
          f"Language: {p['lang']}",
-         f"Length: median {p['median']} words, 75th percentile {p['p75']}; {p['short']}% are 15 words or fewer. Aim near the median; stay under the 75th percentile unless a command, output or reproduction needs the room.",
+         f"Length: median {p['median']} words, 75th percentile {p['p75']}; {p['short']}% are 15 words or fewer. Aim at the median ({p['median']} words); more than {round(p['median'] * 1.5)} needs a reason: a command, output or reproduction the reader needs.",
          f"Habits: thanks as the opening {p['thanks']}%, greeting {p['greeting']}%, lowercase first letter {p['lower']}%, no final period {p['nodot']}%."]
     if p["samples"]:
         L.append("Typical short comments (for register only, never copy their wording):")

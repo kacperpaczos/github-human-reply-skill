@@ -14,6 +14,7 @@ import argparse, concurrent.futures as cf, hashlib, json, pathlib, random, re, s
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORK = ROOT / "benchmark" / "work"
+TAG = ""  # set from --tag: reads runs_<tag>, writes judgements_<tag>
 
 BLIND = """Below is a GitHub issue thread from {repo}, cut at a point where @{login} ({role}) posted the next comment. After it are a few of @{login}'s earlier comments, and then three candidate texts X, Y and Z for that next comment.
 
@@ -119,13 +120,15 @@ def clip(s, n):
 
 def judge_case(cid, judge):
     h = json.loads((WORK / "hidden" / f"{cid}.json").read_text())
-    runs = {arm: json.loads((WORK / "runs" / cid / f"{arm}.json").read_text()) for arm in ("skill", "baseline")}
-    out = WORK / "judgements" / cid
+    runs = {arm: json.loads((WORK / ("runs_" + TAG if TAG else "runs") / cid / f"{arm}.json").read_text()) for arm in ("skill", "baseline")}
+    out = WORK / ("judgements_" + TAG if TAG else "judgements") / cid
     out.mkdir(parents=True, exist_ok=True)
     inp = WORK / "cases" / cid / "input"
     thread = clip((inp / "thread.md").read_text(), 14000)
     voice = clip((inp / "voice.md").read_text(), 3500)
     role = "maintainer" if h["role"] == "maintainer" else "regular contributor"
+    if runs["skill"]["reply"] is None or runs["baseline"]["reply"] is None:
+        return cid, judge, "skipped: a run produced no draft (timeout or bad format)"
     texts = {"human": h["reply"].replace("\r", "").strip(), "skill": runs["skill"]["reply"] or "", "baseline": runs["baseline"]["reply"] or ""}
     status = []
     # blind part: only when both drafts are real replies
@@ -160,9 +163,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--judges", default="fable,codex,minimax")
     ap.add_argument("--jobs", type=int, default=6)
+    ap.add_argument("--tag", default="")
     ap.add_argument("cases", nargs="*")
     a = ap.parse_args()
-    cases = a.cases or sorted(p.name for p in (WORK / "runs").iterdir() if (p / "skill.json").exists() and (p / "baseline.json").exists())
+    global TAG
+    TAG = a.tag
+    rdir = WORK / ("runs_" + TAG if TAG else "runs")
+    cases = a.cases or sorted(p.name for p in rdir.iterdir() if (p / "skill.json").exists() and (p / "baseline.json").exists())
     jobs = [(c, j) for c in cases for j in a.judges.split(",")]
     with cf.ThreadPoolExecutor(a.jobs) as ex:
         for cid, judge, st in ex.map(lambda x: judge_case(*x), jobs):

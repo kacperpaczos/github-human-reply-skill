@@ -39,7 +39,7 @@ If the thread is closed or locked, or after checking there is nothing to add (al
 
 ## 3. Draft now
 
-Read `references/writing.md` (and `references/filing.md` for a new issue), then write the draft in one go. Do not start a discussion before the draft exists. The humanize pass in `references/writing.md` is part of writing, not an extra.
+Read `references/writing.md` (and `references/filing.md` for a new issue), then write the draft in one go. Once the claims are covered, stop reading files and write. Do not start a discussion before the draft exists. The humanize pass in `references/writing.md` is part of writing, not an extra.
 
 ## 4. Show it
 
